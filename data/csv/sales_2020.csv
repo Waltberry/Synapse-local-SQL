@@ -1,0 +1,4 @@
+SalesOrderNumber,SalesOrderLineNumber,OrderDate,CustomerName,EmailAddress,Item,Quantity,UnitPrice,TaxAmount
+SO20001,1,2020-03-10,Donna King,dk@example.com,Road-150 Red,1,949.99,47.50
+SO20002,1,2020-03-11,Ed Wu,ed@example.com,Headset,4,19.99,3.20
+SO20003,1,2020-06-05,Fred Noor,fred@example.com,Mountain-100 Silver,1,1399.00,98.00

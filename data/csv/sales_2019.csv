@@ -1,0 +1,4 @@
+SalesOrderNumber,SalesOrderLineNumber,OrderDate,CustomerName,EmailAddress,Item,Quantity,UnitPrice,TaxAmount
+SO10001,1,2019-01-15,Alice Johnson,alice@example.com,Road-150 Red,1,899.99,45.00
+SO10002,1,2019-02-02,Bob Smith,bob@example.com,Mountain-100 Silver,2,1299.50,120.00
+SO10003,1,2019-02-02,Chris Lee,chris@example.com,Bib Shorts,3,39.99,6.00

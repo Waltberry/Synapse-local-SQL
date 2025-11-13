@@ -1,0 +1,20 @@
+version: "3.9"
+services:
+  duckdb:
+    image: python:3.11-slim
+    working_dir: /workspace
+    volumes:
+      - ./data:/workspace/data
+      - ./duckdb:/workspace/duckdb
+      - ./outputs:/workspace/outputs
+    command: bash -lc "pip install --no-cache-dir duckdb==1.0.0 pandas pyarrow && python duckdb/scripts/run_all.py"
+  spark:
+    image: python:3.11-slim
+    environment:
+      - PYSPARK_PYTHON=python
+    working_dir: /workspace
+    volumes:
+      - ./data:/workspace/data
+      - ./spark:/workspace/spark
+      - ./outputs:/workspace/outputs
+    command: bash -lc "apt-get update && apt-get install -y --no-install-recommends openjdk-17-jre-headless && rm -rf /var/lib/apt/lists/* && pip install --no-cache-dir pyspark==3.5.1 pandas pyarrow && python spark/scripts/bootstrap_and_run.py"

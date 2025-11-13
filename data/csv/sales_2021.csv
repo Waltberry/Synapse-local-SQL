@@ -1,0 +1,4 @@
+SalesOrderNumber,SalesOrderLineNumber,OrderDate,CustomerName,EmailAddress,Item,Quantity,UnitPrice,TaxAmount
+SO30001,1,2021-01-02,Gia Cruz,gia@example.com,Road-150 Red,2,999.99,100.00
+SO30002,1,2021-04-22,Hank Ire,hank@example.com,Water Bottle,5,9.99,2.50
+SO30003,1,2021-09-09,Imani K,imani@example.com,Mountain-100 Silver,1,1499.00,110.00

@@ -1,0 +1,2 @@
+{"SalesOrderNumber": "SOJ001", "SalesOrderLineNumber": 1, "OrderDate": "2020-12-31", "CustomerName": "Jamal Ray", "EmailAddress": "jamal@example.com", "Item": "Helmet", "Quantity": 2, "UnitPrice": 49.99, "TaxAmount": 5.0}
+{"SalesOrderNumber": "SOJ002", "SalesOrderLineNumber": 1, "OrderDate": "2021-02-14", "CustomerName": "Kari Doe", "EmailAddress": "kari@example.com", "Item": "Bib Shorts", "Quantity": 1, "UnitPrice": 39.99, "TaxAmount": 1.8}
