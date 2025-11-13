@@ -3,6 +3,10 @@
 import os, glob, pathlib
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import to_date, year, col, round as sround
+# import shutil, os
+# for p in [DATA/'cetas'/'productsales', DATA/'cetas'/'yearlysales']:
+#     shutil.rmtree(p, ignore_errors=True)
+
 
 BASE = pathlib.Path("/workspace")
 

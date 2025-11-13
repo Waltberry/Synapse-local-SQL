@@ -1,6 +1,10 @@
 #run_all.py
 #!/usr/bin/env python
 import duckdb, os, glob, pathlib
+# import shutil
+# for p in [DATA/'cetas'/'productsales', DATA/'cetas'/'yearlysales']:
+#     shutil.rmtree(p, ignore_errors=True)
+
 
 BASE = pathlib.Path("/workspace")
 
