@@ -1,2 +1,10 @@
-Count
-9
+CalendarYear,MonthNumberOfYear,EnglishMonthName,ProductName,UnitsSold
+2019,1,January,Road-150 Red,1.0
+2019,2,February,Bib Shorts,3.0
+2019,2,February,Mountain-100 Silver,2.0
+2020,3,March,Headset,4.0
+2020,3,March,Road-150 Red,1.0
+2020,6,June,Mountain-100 Silver,1.0
+2021,1,January,Road-150 Red,2.0
+2021,4,April,Water Bottle,5.0
+2021,9,September,Mountain-100 Silver,1.0

@@ -19,7 +19,15 @@ spark = (SparkSession.builder
          .appName("local-synapse-style")
          .master("local[*]")
          .config("spark.sql.session.timeZone", "UTC")
+         # allow CTAS with LOCATION into non-empty dirs
+         .config("spark.sql.legacy.allowNonEmptyLocationInCTAS", "true")
          .getOrCreate())
+
+from pathlib import Path
+import shutil
+BASE = Path("/workspace")
+for p in [BASE/"data"/"cetas"/"productsales", BASE/"data"/"cetas"/"yearlysales"]:
+    shutil.rmtree(p, ignore_errors=True)
 
 # 1) Read CSV and create temp view
 csv_path = str(DATA / "csv" / "*.csv")
@@ -52,7 +60,7 @@ def run_sql_file(path):
         print(f"\n==> SPARK SQL: {stmt[:80]}...")
         try:
             df = spark.sql(stmt)
-            if df is not None:
+            if df is not None and len(df.columns) > 0:
                 outpath = OUT / f"spark_{os.path.basename(path).replace('.sql','')}.csv"
                 df.show(20, truncate=False)
                 df.coalesce(1).write.mode("overwrite").option("header", True).csv(str(outpath)+"_dir")

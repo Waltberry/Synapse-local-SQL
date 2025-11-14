@@ -1,0 +1,6 @@
+USE RetailDB;
+
+INSERT INTO SalesOrder
+VALUES (99999, CAST('2022-01-01' AS TIMESTAMP), 1, 6, 5, 1);
+
+SELECT * FROM SalesOrder WHERE SalesOrderId = 99999;
