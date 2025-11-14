@@ -3,11 +3,14 @@
 Practice **querying CSV/JSON/Parquet directly from a lake-style folder layout** using SQL, entirely **locally**.
 Two engines share the same `data/` folder:
 
-* **DuckDB** (Python runner) — executes SQL in `duckdb/sql`
-* **Spark SQL** (PySpark runner) — executes SQL in `spark/sql`
-* **Pipeline (HTTP → file)** — simple “Copy Data” analog to fetch sample data
+* **DuckDB** (Python runner) — runs SQL in `duckdb/sql`
+* **Spark SQL** (PySpark runner) — runs SQL in `spark/sql`
+* **Pipelines (HTTP → files)** — tiny “Copy Data” analogs to fetch sample data:
 
-This mirrors Synapse *serverless SQL* patterns: **query files in place**, **write partitioned Parquet**, and **use partition pruning**. It also adds **CETAS-style transforms** (write transformed results back to the lake + “external table” metadata).
+  * `pipelines/copy_products.py` → `data/product_data/products.csv`
+  * `pipelines/copy_retail.py`   → `data/lake/RetailDB/{Customer,Product,SalesOrder}/*.csv`
+
+This mirrors Synapse *serverless SQL* patterns: **query files in place**, **write partitioned Parquet**, **prune partitions**, **CETAS-style transforms**, and a **“lake database” analog** (views/tables over folders).
 
 ---
 
@@ -15,9 +18,12 @@ This mirrors Synapse *serverless SQL* patterns: **query files in place**, **writ
 
 * Read **CSV** (auto-infer or explicit schema), **JSON Lines (NDJSON)**, **Parquet**
 * Write **partitioned Parquet** by `year` derived from `OrderDate`
-* **CETAS-style transforms**: `SELECT` → write Parquet to `data/cetas/...` (DuckDB & Spark)
-* Simple **ingest pipeline** (HTTP → `data/product_data/products.csv`)
-* Reproducible SQL for both engines; results saved to `outputs/` (CSV) or to Parquet in `data/`
+* **CETAS-style transforms**
+
+  * DuckDB: `COPY (SELECT …) TO 'data/cetas/...'(FORMAT PARQUET …)`
+  * Spark:  `INSERT OVERWRITE DIRECTORY … USING PARQUET` or `CTAS … USING PARQUET LOCATION …`
+* **Lake DB analog**: declare views/tables over `data/lake/RetailDB/...` and join them
+* Reproducible SQL for both engines; tabular outputs land in `outputs/`
 
 ---
 
@@ -25,10 +31,7 @@ This mirrors Synapse *serverless SQL* patterns: **query files in place**, **writ
 
 * **Docker Desktop** (Windows/macOS) or Docker Engine (Linux)
 * **Docker Compose v2+** (`docker compose …`)
-* Windows users: ensure Docker Desktop is running
-
-> You may see a warning that the `version` key in `docker-compose.yml` is obsolete; it’s harmless.
-> To silence it, remove the line `version: "3.9"`.
+* Windows: ensure Docker Desktop is running
 
 ---
 
@@ -37,19 +40,24 @@ This mirrors Synapse *serverless SQL* patterns: **query files in place**, **writ
 ```bash
 # from repo root
 
-# 1) Copy Data (HTTP → file): fetch products.csv into data/product_data/
-docker compose run --rm pipeline
+# 0) (Optional) Clean previous CETAS outputs
+# rm -rf data/cetas/productsales data/cetas/yearlysales
 
-# 2) DuckDB flow: CSV/JSON → Parquet partitions → run SQL → outputs/
+# 1) Ingest sample datasets
+docker compose run --rm pipeline python pipelines/copy_products.py
+docker compose run --rm pipeline python pipelines/copy_retail.py   # populates data/lake/RetailDB/...
+
+# 2) DuckDB flow: CSV/JSON → Parquet partitions → SQL → outputs/
 docker compose run --rm duckdb
 
 # 3) Spark SQL flow: same idea in PySpark → outputs/
 docker compose run --rm spark
 ```
 
-* Results appear in `outputs/`.
-* Parquet is written to `data/parquet/orders/year=.../`.
-* CETAS-style outputs are written to `data/cetas/.../`.
+* Results: `outputs/`
+* Parquet partitions: `data/parquet/orders/year=.../`
+* CETAS outputs: `data/cetas/.../`
+* Lake-DB sample data: `data/lake/RetailDB/...`
 
 ---
 
@@ -59,152 +67,141 @@ docker compose run --rm spark
 synapse-local-sql/
 ├─ docker-compose.yml
 ├─ data/
-│  ├─ csv/                           # sample sales_2019/2020/2021.csv
-│  ├─ json/                          # orders.jsonl (NDJSON)
-│  ├─ parquet/                       # generated Parquet (partitioned by year)
-│  ├─ cetas/                         # CETAS-style outputs (productsales/yearlysales)
-│  └─ product_data/                  # products.csv (downloaded by pipeline)
+│  ├─ csv/                            # sales_2019/2020/2021.csv
+│  ├─ json/                           # orders.jsonl (NDJSON)
+│  ├─ lake/
+│  │  └─ RetailDB/
+│  │     ├─ Customer/customer.csv     # headerless CSVs (pipelines/copy_retail.py)
+│  │     ├─ Product/product.csv
+│  │     └─ SalesOrder/salesorder.csv
+│  ├─ parquet/                        # generated Parquet (partitioned by year)
+│  ├─ cetas/                          # CETAS-style outputs (productsales/yearlysales)
+│  └─ product_data/                   # products.csv (pipelines/copy_products.py)
 ├─ pipelines/
-│  └─ copy_products.py               # HTTP → file (Copy Data analog)
+│  ├─ copy_products.py                # HTTP → file
+│  └─ copy_retail.py                  # HTTP → lake/RetailDB/...
 ├─ duckdb/
-│  ├─ scripts/run_all.py             # reads CSV/JSON, writes Parquet, runs SQL
+│  ├─ scripts/run_all.py
 │  └─ sql/
 │     ├─ 01_csv.sql
 │     ├─ 02_parquet.sql
 │     ├─ 03_json.sql
-│     ├─ 04_cetas.sql               # CETAS-style: write Parquet + “external” views
-│     ├─ 10_products_top100.sql      # OPENROWSET-style "TOP 100"
-│     ├─ 11_products_counts.sql      # category counts
-│     └─ 20_mini_warehouse.sql       # Dim/Fact joins (Dedicated SQL analog)
+│     ├─ 04_cetas.sql
+│     ├─ 10_products_top100.sql
+│     ├─ 11_products_counts.sql
+│     ├─ 20_mini_warehouse.sql
+│     ├─ 50_retail_schema.sql         # views over RetailDB folders (explicit column list)
+│     └─ 51_retail_join.sql
 ├─ spark/
-│  ├─ scripts/bootstrap_and_run.py    # same flow in PySpark
+│  ├─ scripts/bootstrap_and_run.py
 │  └─ sql/
 │     ├─ 01_csv.sql
 │     ├─ 02_parquet.sql
 │     ├─ 03_json.sql
-│     ├─ 04_cetas.sql               # CETAS-style: write Parquet (+ external table)
-│     └─ 10_products_counts.sql
-└─ outputs/                           # query results (generated)
+│     ├─ 04_cetas.sql
+│     ├─ 10_products_counts.sql
+│     ├─ 50_retail_schema.sql         # tables over RetailDB folders (schema inference)
+│     ├─ 51_retail_join.sql
+│     └─ 52_retail_insert.sql         # demo INSERT into SalesOrder
+└─ outputs/
 ```
 
 ---
 
 ## How It Works
 
-1. **Ingest (pipeline)** — Download `products.csv` → `data/product_data/`.
+1. **Pipelines** fetch sample CSVs (products + retail “lake DB”).
 2. **Serverless-style SQL over files**
 
-   * **DuckDB**: `read_csv_auto/read_parquet/read_json_auto`
-   * **Spark**: `spark.read.csv/json/parquet`
+   * DuckDB: `read_csv_auto / read_parquet / read_json_auto`
+   * Spark:  `spark.read.csv / json / parquet`
 3. **Augment** with `year = YEAR(OrderDate)`
 4. **Write Parquet** partitioned by `year` → `data/parquet/orders/year=…/`
 5. **Run SQL scripts** (aggregations, filters, joins) → `outputs/`
-6. **CETAS-style transform** — `SELECT` results written back to the lake:
+6. **CETAS-style** persist transformed results under `data/cetas/...`
+7. **Lake DB analog**
 
-   * **DuckDB**: `COPY (SELECT …) TO 'data/cetas/...'(FORMAT PARQUET …)`
-   * **Spark**: `INSERT OVERWRITE DIRECTORY … USING PARQUET` or `CTAS USING PARQUET LOCATION`
-
-**Flow sketch:**
-
-```
-        data/csv/*.csv         data/json/*.jsonl         (pipeline) products.csv
-             │                         │                         │
-             ├───────────────┬─────────┤                         │
-             │               │                                       ↓
-        DuckDB runner     Spark runner                     data/product_data/products.csv
-     (duckdb/scripts)   (spark/scripts)
-             │               │
-      read_csv/json()     spark.read.csv/json()
-             │               │
-       + derive year       + derive year
-       + write Parquet     + write Parquet
-     (partitionBy year)  (partitionBy year)
-             │               │
-   read_parquet(...)   read.parquet(...)
-   + run SQL files      + run SQL files
-             │               │
-          outputs/        outputs/
-             │               │
-      CETAS-style:       CETAS-style:
-   COPY ... TO Parquet  INSERT/CTAS USING PARQUET
-             │               │
-        data/cetas/...   data/cetas/...
-```
+   * DuckDB: views over headerless CSVs (`50_retail_schema.sql`) + join (`51_retail_join.sql`)
+   * Spark: external tables over folders (`50_retail_schema.sql`) + join + insert (`51/52`)
 
 ---
 
-## What to Run (mirrors the Synapse lab)
+## What to Run (maps to Synapse labs)
 
 ### A) “Serverless SQL” over **products.csv**
 
-* DuckDB: `duckdb/sql/10_products_top100.sql`, `11_products_counts.sql`
-* Spark:  `spark/sql/10_products_counts.sql`
+* DuckDB: `10_products_top100.sql`, `11_products_counts.sql`
+* Spark:  `10_products_counts.sql`
 
 ### B) CSV → **Parquet partitions** → prune by `year`
 
-* DuckDB: `duckdb/sql/01_csv.sql`, `02_parquet.sql`
-* Spark:  `spark/sql/01_csv.sql`,  `02_parquet.sql`
+* DuckDB: `01_csv.sql`, `02_parquet.sql`
+* Spark:  `01_csv.sql`, `02_parquet.sql`
 
 ### C) **JSON Lines** query (OPENROWSET JSON analog)
 
-* DuckDB: `duckdb/sql/03_json.sql`
-* Spark:  `spark/sql/03_json.sql`
+* DuckDB: `03_json.sql`
+* Spark:  `03_json.sql`
 
-### D) **CETAS-style transforms** (write transformed results back to lake)
+### D) **CETAS-style transforms** (persist transformed results)
 
-* DuckDB: `duckdb/sql/04_cetas.sql`
+* DuckDB: `04_cetas.sql`
 
-  * Writes: `data/cetas/productsales/*.parquet`, `data/cetas/yearlysales/CalendarYear=.../*.parquet`
-  * Registers views: `productsales_totals`, `yearlysales_totals`
-* Spark:  `spark/sql/04_cetas.sql`
+  * Writes → `data/cetas/productsales/*.parquet`,
+    `data/cetas/yearlysales/CalendarYear=.../*.parquet`
+* Spark:  `04_cetas.sql`
 
-  * Writes: `data/cetas/productsales/` via `INSERT OVERWRITE DIRECTORY`
-  * CTAS table `ext_yearlysales` at `data/cetas/yearlysales/`
+  * `INSERT OVERWRITE DIRECTORY` → `data/cetas/productsales/`
+  * `CTAS … LOCATION '/workspace/data/cetas/yearlysales'`
 
-### E) Mini **Dedicated SQL pool** (warehouse-style joins)
+### E) **Lake Database analog** (RetailDB over folders)
 
-* DuckDB: `duckdb/sql/20_mini_warehouse.sql` (builds `wh.Dim*` + `wh.Fact*`, runs join)
+* **Prepare data**: `docker compose run --rm pipeline python pipelines/copy_retail.py`
+* **DuckDB**: `50_retail_schema.sql` → views, then `51_retail_join.sql`
+* **Spark**:  `50_retail_schema.sql` → tables, `51_retail_join.sql` (join), `52_retail_insert.sql` (insert demo)
 
----
-
-## Using Your Own Data
-
-* Drop additional CSVs into `data/csv/` (**must include `OrderDate`**).
-* Append NDJSON to `data/json/orders.jsonl`.
-* Re-run `duckdb` or `spark`; new Parquet partitions (e.g., `year=2022/`) appear automatically.
-* Update CETAS SQL to write to a new target under `data/cetas/your_target/`.
+> RetailDB CSVs are **headerless**. DuckDB script defines a column list; Spark uses schema inference but you can `USING csv OPTIONS(header 'false')` if you prefer explicitness.
 
 ---
 
 ## Outputs
 
-* **DuckDB**: one CSV per script in `outputs/duckdb_*.csv` (for queries that return rows)
-* **Spark**: a folder per script in `outputs/spark_*.csv_dir/part-*.csv`
-* **CETAS-style**: Parquet written under `data/cetas/...` (primary artifact).
-  Optionally query back via views (DuckDB) or tables (Spark) to emit CSVs to `outputs/`.
+* **DuckDB**: one CSV per script in `outputs/duckdb_*.csv`
+* **Spark**: folder per script in `outputs/spark_*.csv_dir/part-*.csv`
+* **CETAS**: Parquet in `data/cetas/...` (primary artifact)
 
 ---
 
 ## Troubleshooting
 
-* **Docker Desktop not running (Windows):** start it, then re-run the command.
-* **Compose “version” warning:** remove `version: "3.9"` from `docker-compose.yml`.
-* **Spark Java runtime:** Spark service installs **OpenJDK 21** in-container. Prefer Java 17? Swap the base image to an `eclipse-temurin:17-jre` variant and install Python.
-* **Idempotent re-runs (CETAS):** deleting a view/table **does not delete files**.
-  If re-running fails due to existing data, **delete target folders**:
+* **CETAS re-runs**: delete existing target folders then re-run:
 
-  ```
+  ```bash
   rm -rf data/cetas/productsales data/cetas/yearlysales
   ```
+* **Spark CTAS to non-empty LOCATION**: either delete the folder or:
 
-  (Or wire this into your runner scripts before writing.)
+  ```sql
+  SET spark.sql.legacy.allowNonEmptyLocationInCTAS = true;
+  ```
+* **Spark “Datasource does not support writing empty schema” WARNs**:
+  benign when your runner prints DDL/INSERT statements (no tabular output).
+* **RetailDB (DuckDB) missing columns**: the CSVs are headerless—keep the explicit
+  column list in `50_retail_schema.sql`.
+* **Compose `version` warning**: remove `version: "3.9"` from `docker-compose.yml`.
 
 ---
 
-## Why This Mirrors Synapse Serverless
+## Cleanup
 
-* **No DB ingest** — query files directly with SQL
-* **Columnar Parquet + partitions** — standard lakehouse layout
-* **Partition pruning** — filter by `year` for less scan & faster queries
-* **CETAS-style** — transform with SQL and persist back to the lake
-* **Two engines** — prove queries are engine-agnostic (DuckDB & Spark)
+Stop/remove containers & networks:
+
+```bash
+docker compose down
+```
+
+Free disk (dangling images, stopped containers, unused networks/volumes):
+
+```bash
+docker system prune -a
+```
