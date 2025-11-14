@@ -26,6 +26,26 @@ services:
       pip install --no-cache-dir pyspark==3.5.1 pandas pyarrow &&
       python spark/scripts/bootstrap_and_run.py
       "
+
+  spark-viz:
+    image: python:3.11-slim
+    environment:
+      - PYSPARK_PYTHON=python
+      - JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
+    working_dir: /workspace
+    volumes:
+      - ./data:/workspace/data
+      - ./spark:/workspace/spark
+      - ./outputs:/workspace/outputs
+    command: >
+      bash -lc "
+      apt-get update &&
+      apt-get install -y --no-install-recommends openjdk-21-jre-headless procps &&
+      rm -rf /var/lib/apt/lists/* &&
+      pip install --no-cache-dir pyspark==3.5.1 pandas pyarrow matplotlib &&
+      python spark/scripts/visualize_products.py
+      "
+
   pipeline:
     image: python:3.11-slim
     working_dir: /workspace

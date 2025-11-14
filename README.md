@@ -3,12 +3,12 @@
 Practice **querying CSV/JSON/Parquet directly from a lake-style folder layout** using SQL, entirely **locally**.
 Two engines share the same `data/` folder:
 
-* **DuckDB** (Python runner) — runs SQL in `duckdb/sql`
-* **Spark SQL** (PySpark runner) — runs SQL in `spark/sql`
-* **Pipelines (HTTP → files)** — tiny “Copy Data” analogs to fetch sample data:
-
-  * `pipelines/copy_products.py` → `data/product_data/products.csv`
-  * `pipelines/copy_retail.py`   → `data/lake/RetailDB/{Customer,Product,SalesOrder}/*.csv`
+- **DuckDB** (Python runner) — runs SQL in `duckdb/sql`
+- **Spark SQL** (PySpark runner) — runs SQL in `spark/sql`
+- **Pipelines (HTTP → files)** — tiny “Copy Data” analogs to fetch sample data:
+  - `pipelines/copy_products.py` → `data/product_data/products.csv`
+  - `pipelines/copy_retail.py`   → `data/lake/RetailDB/{Customer,Product,SalesOrder}/*.csv`
+- **Spark Viz (optional)** — renders charts to `outputs/` via Matplotlib
 
 This mirrors Synapse *serverless SQL* patterns: **query files in place**, **write partitioned Parquet**, **prune partitions**, **CETAS-style transforms**, and a **“lake database” analog** (views/tables over folders).
 
@@ -16,22 +16,22 @@ This mirrors Synapse *serverless SQL* patterns: **query files in place**, **writ
 
 ## Features
 
-* Read **CSV** (auto-infer or explicit schema), **JSON Lines (NDJSON)**, **Parquet**
-* Write **partitioned Parquet** by `year` derived from `OrderDate`
-* **CETAS-style transforms**
-
-  * DuckDB: `COPY (SELECT …) TO 'data/cetas/...'(FORMAT PARQUET …)`
-  * Spark:  `INSERT OVERWRITE DIRECTORY … USING PARQUET` or `CTAS … USING PARQUET LOCATION …`
-* **Lake DB analog**: declare views/tables over `data/lake/RetailDB/...` and join them
-* Reproducible SQL for both engines; tabular outputs land in `outputs/`
+- Read **CSV** (auto-infer or explicit schema), **JSON Lines (NDJSON)**, **Parquet**
+- Write **partitioned Parquet** by `year` derived from `OrderDate`
+- **CETAS-style transforms**
+  - DuckDB: `COPY (SELECT …) TO 'data/cetas/...'(FORMAT PARQUET …)`
+  - Spark:  `INSERT OVERWRITE DIRECTORY … USING PARQUET` or `CTAS … USING PARQUET LOCATION …`
+- **Lake DB analog**: declare views/tables over `data/lake/RetailDB/...` and join them
+- Reproducible SQL for both engines; tabular outputs land in `outputs/`
+- **Optional visualizations**: Spark → Matplotlib PNGs in `outputs/`
 
 ---
 
 ## Prerequisites
 
-* **Docker Desktop** (Windows/macOS) or Docker Engine (Linux)
-* **Docker Compose v2+** (`docker compose …`)
-* Windows: ensure Docker Desktop is running
+- **Docker Desktop** (Windows/macOS) or Docker Engine (Linux)
+- **Docker Compose v2+** (`docker compose …`)
+- Windows: ensure Docker Desktop is running
 
 ---
 
@@ -52,6 +52,9 @@ docker compose run --rm duckdb
 
 # 3) Spark SQL flow: same idea in PySpark → outputs/
 docker compose run --rm spark
+
+# 4) (Optional) Spark visualization: saves PNGs & CSVs to outputs/
+docker compose run --rm spark-viz
 ```
 
 * Results: `outputs/`
@@ -94,6 +97,7 @@ synapse-local-sql/
 │     └─ 51_retail_join.sql
 ├─ spark/
 │  ├─ scripts/bootstrap_and_run.py
+│  ├─ scripts/visualize_products.py   # Matplotlib charts → outputs/
 │  └─ sql/
 │     ├─ 01_csv.sql
 │     ├─ 02_parquet.sql
@@ -123,6 +127,7 @@ synapse-local-sql/
 
    * DuckDB: views over headerless CSVs (`50_retail_schema.sql`) + join (`51_retail_join.sql`)
    * Spark: external tables over folders (`50_retail_schema.sql`) + join + insert (`51/52`)
+8. **Visualize (optional)** with Spark → PNGs in `outputs/`
 
 ---
 
@@ -160,21 +165,20 @@ synapse-local-sql/
 * **DuckDB**: `50_retail_schema.sql` → views, then `51_retail_join.sql`
 * **Spark**:  `50_retail_schema.sql` → tables, `51_retail_join.sql` (join), `52_retail_insert.sql` (insert demo)
 
-> RetailDB CSVs are **headerless**. DuckDB script defines a column list; Spark uses schema inference but you can `USING csv OPTIONS(header 'false')` if you prefer explicitness.
+> RetailDB CSVs are **headerless**. DuckDB script defines a column list; Spark can use schema inference or `USING csv OPTIONS(header 'false')` for explicitness.
 
----
+### F) **Visualize (optional)**
 
-## Outputs
+* `docker compose run --rm spark-viz`
 
-* **DuckDB**: one CSV per script in `outputs/duckdb_*.csv`
-* **Spark**: folder per script in `outputs/spark_*.csv_dir/part-*.csv`
-* **CETAS**: Parquet in `data/cetas/...` (primary artifact)
+  * Saves `outputs/products_by_category.png`
+  * Bonus: `outputs/revenue_by_year.png` if Parquet partitions exist
 
 ---
 
 ## Troubleshooting
 
-* **CETAS re-runs**: delete existing target folders then re-run:
+* **CETAS re-runs**: delete existing target folders before writing:
 
   ```bash
   rm -rf data/cetas/productsales data/cetas/yearlysales
@@ -185,10 +189,10 @@ synapse-local-sql/
   SET spark.sql.legacy.allowNonEmptyLocationInCTAS = true;
   ```
 * **Spark “Datasource does not support writing empty schema” WARNs**:
-  benign when your runner prints DDL/INSERT statements (no tabular output).
-* **RetailDB (DuckDB) missing columns**: the CSVs are headerless—keep the explicit
+  benign when the runner prints DDL/INSERT statements (no tabular output).
+* **RetailDB (DuckDB) missing columns**: those CSVs are headerless—keep the explicit
   column list in `50_retail_schema.sql`.
-* **Compose `version` warning**: remove `version: "3.9"` from `docker-compose.yml`.
+* **Compose `version` warning**: you can omit `version: "3.9"` entirely.
 
 ---
 
@@ -205,3 +209,10 @@ Free disk (dangling images, stopped containers, unused networks/volumes):
 ```bash
 docker system prune -a
 ```
+
+---
+
+## Advanced (optional): Iceberg & Trino
+
+* **Apache Iceberg** (free, Apache 2.0) is a *table format* for lakes that adds ACID, time travel, schema/partition evolution, and reliable deletes/merges on top of Parquet files. Multiple engines (Spark/Trino/Flink/etc.) can share the same tables.
+* **Trino** (free, Apache 2.0) is a *distributed SQL engine* for fast, interactive queries and **federation** across many sources (object storage via Iceberg/Hive, relational DBs, etc.).
